@@ -75,6 +75,38 @@ Environment=RUST_LOG=info
 WantedBy=multi-user.target
 ```
 
+1. **Настройте права доступа:**
+
+Чтобы сервис мог управлять `telemt` и редактировать его конфиг без прав root:
+
+**А. Разрешите перезапуск сервиса через Polkit:**
+
+Создайте файл `/etc/polkit-1/rules.d/50-telemt-admin.rules`:
+
+```javascript
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "telemt.service" &&
+        subject.user == "telemt-admin") {
+        return polkit.Result.YES;
+    }
+});
+```
+
+**Б. Настройте права на конфиг telemt:**
+
+```bash
+# Создаем группу telemt если её нет
+sudo groupadd -f telemt
+
+# Добавляем пользователя бота в группу
+sudo usermod -aG telemt telemt-admin
+
+# Меняем группу владельца конфига и даем права на запись группе
+sudo chown :telemt /etc/telemt.toml
+sudo chmod 664 /etc/telemt.toml
+```
+
 1. **Запустите сервис:**
 
 ```bash
@@ -84,7 +116,7 @@ sudo systemctl enable --now telemt-admin.service
 
 ## 📋 Как пользоваться
 
-### Для обычных пользователей
+### Для пользователей
 
 1. Найти бота и нажать `/start`.
 2. Дождаться одобрения администратором.
