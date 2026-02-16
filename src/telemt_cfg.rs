@@ -1,6 +1,7 @@
 //! Чтение и обновление конфига telemt (/etc/telemt.toml).
 
 use serde::Deserialize;
+use std::io::ErrorKind;
 use std::path::Path;
 use std::sync::Mutex;
 use toml_edit::{DocumentMut, Item};
@@ -173,8 +174,28 @@ impl TelemtConfig {
             .map(|value| value.as_nanos())
             .unwrap_or(0);
         let tmp = parent.join(format!(".telemt.toml.{}.{}", std::process::id(), nonce));
-        std::fs::write(&tmp, content)
-            .map_err(|e| anyhow::anyhow!("Не удалось записать временный файл: {}", e))?;
+        if let Err(err) = std::fs::write(&tmp, content) {
+            if err.kind() == ErrorKind::PermissionDenied {
+                // В некоторых окружениях есть права на изменение файла, но нет прав
+                // на создание новых файлов в директории (например, /etc).
+                tracing::warn!(
+                    target_path = %self.path.display(),
+                    "No permission to create temporary file; falling back to direct write"
+                );
+                std::fs::write(&self.path, content).map_err(|e| {
+                    anyhow::anyhow!(
+                        "Не удалось записать {} после fallback: {}",
+                        self.path.display(),
+                        e
+                    )
+                })?;
+                return Ok(());
+            }
+            return Err(anyhow::anyhow!(
+                "Не удалось записать временный файл: {}",
+                err
+            ));
+        }
         std::fs::rename(&tmp, &self.path)
             .map_err(|e| anyhow::anyhow!("Не удалось переименовать временный файл: {}", e))?;
         tracing::debug!(
