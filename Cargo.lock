@@ -153,8 +153,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fac4744fb15ae8337dc853fee7fb3f4e48c0fbaa23d0afe49c447b4fab126118"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link",
 ]
 
@@ -2244,9 +2246,10 @@ checksum = "20f34339676cdcab560c9a82300c4c2581f68b9369aedf0fae86f2ff9565ff3e"
 
 [[package]]
 name = "telemt-admin"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
+ "chrono",
  "hex",
  "rand 0.9.2",
  "serde",

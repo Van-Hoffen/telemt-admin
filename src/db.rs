@@ -23,6 +23,7 @@ pub struct RegistrationRequest {
     pub id: i64,
     pub tg_user_id: i64,
     pub tg_username: Option<String>,
+    pub tg_display_name: Option<String>,
     pub status: String,
     pub telemt_username: Option<String>,
     pub secret: Option<String>,
@@ -81,6 +82,7 @@ impl Db {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 tg_user_id INTEGER NOT NULL,
                 tg_username TEXT,
+                tg_display_name TEXT,
                 status TEXT NOT NULL DEFAULT 'pending',
                 telemt_username TEXT,
                 secret TEXT,
@@ -95,6 +97,19 @@ impl Db {
         .execute(&self.pool)
         .await
         .map_err(|e| anyhow::anyhow!("Миграция БД: {}", e))?;
+
+        let has_display_name_column = sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM pragma_table_info('registration_requests') WHERE name = 'tg_display_name'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        if has_display_name_column == 0 {
+            sqlx::query("ALTER TABLE registration_requests ADD COLUMN tg_display_name TEXT")
+                .execute(&self.pool)
+                .await?;
+        }
+
         Ok(())
     }
 
@@ -103,11 +118,12 @@ impl Db {
         &self,
         tg_user_id: i64,
         tg_username: Option<&str>,
+        tg_display_name: Option<&str>,
     ) -> Result<RegisterResult, anyhow::Error> {
         let now = current_unix_timestamp()?;
 
         let existing = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ?",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ?",
         )
         .bind(tg_user_id)
         .fetch_optional(&self.pool)
@@ -124,8 +140,11 @@ impl Db {
                 }
                 "rejected" => Ok(RegisterResult::Rejected),
                 _ => {
-                    sqlx::query("UPDATE registration_requests SET tg_username = ?, created_at = ? WHERE tg_user_id = ?")
+                    sqlx::query(
+                        "UPDATE registration_requests SET tg_username = ?, tg_display_name = ?, created_at = ? WHERE tg_user_id = ?",
+                    )
                         .bind(tg_username)
+                        .bind(tg_display_name)
                         .bind(now)
                         .bind(tg_user_id)
                         .execute(&self.pool)
@@ -136,10 +155,11 @@ impl Db {
         }
 
         sqlx::query(
-            "INSERT INTO registration_requests (tg_user_id, tg_username, status, created_at) VALUES (?, ?, 'pending', ?)",
+            "INSERT INTO registration_requests (tg_user_id, tg_username, tg_display_name, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
         )
         .bind(tg_user_id)
         .bind(tg_username)
+        .bind(tg_display_name)
         .bind(now)
         .execute(&self.pool)
         .await?;
@@ -157,7 +177,7 @@ impl Db {
         tg_user_id: i64,
     ) -> Result<Option<RegistrationRequest>, anyhow::Error> {
         let r = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ? AND status = 'pending'",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ? AND status = 'pending'",
         )
         .bind(tg_user_id)
         .fetch_optional(&self.pool)
@@ -171,7 +191,7 @@ impl Db {
         id: i64,
     ) -> Result<Option<RegistrationRequest>, anyhow::Error> {
         let r = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -189,7 +209,7 @@ impl Db {
         let now = current_unix_timestamp()?;
 
         let r = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -218,7 +238,7 @@ impl Db {
         let now = current_unix_timestamp()?;
 
         let r = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE id = ? AND status = 'pending'",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -297,7 +317,7 @@ impl Db {
         tg_user_id: i64,
     ) -> Result<Option<(String, String)>, anyhow::Error> {
         let r = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ? AND status = 'approved'",
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ? AND status = 'approved'",
         )
         .bind(tg_user_id)
         .fetch_optional(&self.pool)
@@ -310,7 +330,7 @@ impl Db {
         limit: i64,
     ) -> Result<Vec<RegistrationRequest>, anyhow::Error> {
         let rows = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at
              FROM registration_requests
              WHERE status = ?
              ORDER BY created_at ASC
@@ -328,7 +348,7 @@ impl Db {
         limit: i64,
     ) -> Result<Vec<RegistrationRequest>, anyhow::Error> {
         let rows = sqlx::query_as::<_, RegistrationRequest>(
-            "SELECT id, tg_user_id, tg_username, status, telemt_username, secret, created_at
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at
              FROM registration_requests
              WHERE status = ?
              ORDER BY created_at DESC

@@ -29,6 +29,19 @@ fn sender_user_id(msg: &Message) -> Option<i64> {
     msg.from.as_ref().map(|user| user.id.0 as i64)
 }
 
+fn sender_display_name(msg: &Message) -> Option<String> {
+    msg.from.as_ref().map(|user| {
+        let mut full_name = user.first_name.clone();
+        if let Some(last_name) = user.last_name.as_deref()
+            && !last_name.trim().is_empty()
+        {
+            full_name.push(' ');
+            full_name.push_str(last_name);
+        }
+        full_name
+    })
+}
+
 fn is_admin_message(msg: &Message, state: &BotState) -> bool {
     sender_user_id(msg).is_some_and(|user_id| state.config.is_admin(user_id))
 }
@@ -74,9 +87,11 @@ async fn approve_request_and_build_link(
 async fn start_cmd(bot: Bot, msg: Message, state: BotState) -> HandlerResult {
     let user_id = sender_user_id(&msg).unwrap_or_default();
     let username = msg.from.as_ref().and_then(|u| u.username.clone());
+    let display_name = sender_display_name(&msg);
     tracing::info!(
         user_id = user_id,
         username = ?username,
+        display_name = ?display_name,
         "Received /start command"
     );
 
@@ -92,7 +107,7 @@ async fn start_cmd(bot: Bot, msg: Message, state: BotState) -> HandlerResult {
 
     let result = state
         .db
-        .register_or_get(user_id, username.as_deref())
+        .register_or_get(user_id, username.as_deref(), display_name.as_deref())
         .await?;
 
     match result {
@@ -140,10 +155,12 @@ async fn notify_admins(bot: &Bot, state: &BotState, req: &RegistrationRequest) -
         "📋 Новая заявка #{}:\n\
          User ID: {}\n\
          Username: @{}\n\
+         Имя: {}\n\
          Время: {}",
         req.id,
         req.tg_user_id,
         req.tg_username.as_deref().unwrap_or("—"),
+        req.tg_display_name.as_deref().unwrap_or("—"),
         format_timestamp(req.created_at),
     );
 
@@ -166,9 +183,15 @@ async fn notify_admins(bot: &Bot, state: &BotState, req: &RegistrationRequest) -
 }
 
 fn format_timestamp(ts: i64) -> String {
-    use std::time::{Duration, UNIX_EPOCH};
-    let d = UNIX_EPOCH + Duration::from_secs(ts as u64);
-    format!("{:?}", d)
+    use chrono::{DateTime, Local, Utc};
+
+    DateTime::<Utc>::from_timestamp(ts, 0)
+        .map(|dt| {
+            dt.with_timezone(&Local)
+                .format("%Y-%m-%d %H:%M:%S %:z")
+                .to_string()
+        })
+        .unwrap_or_else(|| format!("Некорректный timestamp: {}", ts))
 }
 
 async fn callback_approve(bot: Bot, q: CallbackQuery, state: BotState) -> HandlerResult {
@@ -551,10 +574,12 @@ async fn admin_show_pending(bot: &Bot, chat_id: ChatId, state: &BotState) -> Han
             "📋 Заявка #{}:\n\
              User ID: {}\n\
              Username: @{}\n\
+             Имя: {}\n\
              Время: {}",
             req.id,
             req.tg_user_id,
             req.tg_username.as_deref().unwrap_or("—"),
+            req.tg_display_name.as_deref().unwrap_or("—"),
             format_timestamp(req.created_at),
         );
         bot.send_message(chat_id, text)
@@ -585,11 +610,23 @@ async fn admin_show_users(bot: &Bot, chat_id: ChatId, state: &BotState) -> Handl
     .await?;
 
     for user in users {
+        let display_name = user
+            .tg_display_name
+            .clone()
+            .or_else(|| {
+                user.tg_username
+                    .as_ref()
+                    .map(|username| format!("@{}", username))
+            })
+            .or_else(|| user.telemt_username.clone())
+            .unwrap_or_else(|| format!("tg_{}", user.tg_user_id));
+
         let text = format!(
-            "👤 {} (tg id: {})\nUsername: @{}\nСоздано: {}",
-            user.telemt_username.as_deref().unwrap_or("—"),
+            "👤 {} (tg id: {})\nUsername: @{}\nИмя: {}\nСоздано: {}",
+            display_name,
             user.tg_user_id,
             user.tg_username.as_deref().unwrap_or("—"),
+            user.tg_display_name.as_deref().unwrap_or("—"),
             format_timestamp(user.created_at),
         );
         bot.send_message(chat_id, text)
