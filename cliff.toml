@@ -1,12 +1,11 @@
 [changelog]
 header = """
-# Changelog
+# 📋 История изменений
 """
 body = """
-{% if version %}## {{ version }}{% else %}## Unreleased{% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
-
+{% if version %}## {{ version }}{% else %}## В разработке{% endif %} - {{ timestamp | date(format="%Y-%m-%d") }}
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group }}
+### {{ group | striptags | trim | upper_first }}
 {% for commit in commits %}
 - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})
 {% endfor %}
@@ -20,16 +19,17 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^perf", group = "Performance" },
-  { message = "^refactor", group = "Refactoring" },
-  { message = "^docs", group = "Documentation" },
-  { message = "^build", group = "Build System" },
-  { message = "^ci", group = "CI/CD" },
-  { message = "^chore", group = "Chores" },
-  { message = "^revert", group = "Reverts" },
-  { message = "^test", skip = true },
+    { message = "^feat", group = "<!-- 0 -->✨ Новые возможности" },
+    { message = "^fix", group = "<!-- 1 -->🐛 Исправления ошибок" },
+    { message = "^refactor", group = "<!-- 2 -->♻️ Рефакторинг" },
+    { message = "^perf", group = "<!-- 3 -->⚡ Производительность" },
+    { message = "^build", group = "<!-- 4 -->🛠 Сборка и зависимости" },
+    { message = "^ci", group = "<!-- 5 -->👷 CI/CD" },
+    { message = "^docs", group = "<!-- 6 -->📚 Документация" },
+    { message = "^style", group = "<!-- 7 -->🎨 Стиль кода" },
+    { message = "^test", group = "<!-- 8 -->🧪 Тесты" },
+    { message = "^chore", group = "<!-- 9 -->🔧 Прочее" },
+    { message = "^revert", group = "<!-- 10 -->⏪ Откат изменений" },
 ]
 protect_breaking_commits = false
 filter_commits = false
