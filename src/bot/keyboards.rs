@@ -31,8 +31,10 @@ pub fn admin_menu() -> KeyboardMarkup {
             KeyboardButton::new(BTN_ADMIN_SERVICE),
             KeyboardButton::new(BTN_ADMIN_STATS),
         ],
-        vec![KeyboardButton::new(BTN_ADMIN_CREATE_HINT)],
-        vec![KeyboardButton::new(BTN_ADMIN_HELP)],
+        vec![
+            KeyboardButton::new(BTN_ADMIN_CREATE_HINT),
+            KeyboardButton::new(BTN_ADMIN_HELP),
+        ],
     ])
     .resize_keyboard()
     .persistent()
