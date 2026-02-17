@@ -58,23 +58,36 @@ pub fn render_invite_token_line(token: &InviteToken) -> String {
     )
 }
 
-pub fn render_user_card_text(user: &RegistrationRequest, page: i64) -> String {
+pub fn render_user_card_text(user: &RegistrationRequest) -> String {
+    let username = user
+        .tg_username
+        .as_deref()
+        .map(|u| format!("@{}", u))
+        .unwrap_or_else(|| "—".to_string());
+    let telemt = user.telemt_username.as_deref().unwrap_or("—");
+
     format!(
-        "👤 Карточка пользователя\n\n\
-         Страница списка: {}\n\
-         TG ID: {}\n\
-         Username: @{}\n\
-         Имя: {}\n\
-         Статус: {}\n\
-         Telemt username: {}\n\
-         Создано: {}",
-        page,
+        "👤 {}\n\n\
+         🆔 {}\n\
+         📱 {}\n\
+         📋 {}\n\
+         🔗 {}\n\
+         📅 {}",
+        user_display_name(user),
         user.tg_user_id,
-        user.tg_username.as_deref().unwrap_or("—"),
-        user.tg_display_name.as_deref().unwrap_or("—"),
+        username,
         user.status,
-        user.telemt_username.as_deref().unwrap_or("—"),
+        telemt,
         format_timestamp(user.created_at),
+    )
+}
+
+pub fn render_user_proxy_for_forward(user: &RegistrationRequest, link: &str) -> String {
+    format!(
+        "👤 {} ({})\n\n🔗 {}",
+        user_display_name(user),
+        user.tg_user_id,
+        link
     )
 }
 

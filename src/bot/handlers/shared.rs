@@ -594,23 +594,15 @@ pub async fn send_user_qr_to_admin(
 
     let params = state.telemt_cfg.read_link_params()?;
     let link = build_proxy_link(&params, secret)?;
-    let caption_name = user_display_name(user);
-    let text = format!(
-        "Данные пользователя {}\nTG ID: {}\n\nСсылка на прокси:\n{}",
-        caption_name, user.tg_user_id, link
-    );
     let qr_png = build_user_qr_png_bytes(&link)?;
+    let caption = super::format::render_user_proxy_for_forward(user, &link);
 
     if let Some((chat_id, _)) = callback_message_target(q) {
-        bot.send_message(chat_id, text).await?;
         bot.send_photo(
             chat_id,
             InputFile::memory(qr_png).file_name(format!("telemt-proxy-{}.png", user.tg_user_id)),
         )
-        .caption(format!(
-            "QR для ручной пересылки пользователю {} (id {}).",
-            caption_name, user.tg_user_id
-        ))
+        .caption(caption)
         .await?;
     }
     Ok(())

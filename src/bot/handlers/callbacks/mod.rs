@@ -137,7 +137,7 @@ async fn callback_user_open(bot: Bot, q: CallbackQuery, state: BotState) -> Hand
         .text("Открыта карточка")
         .await?;
     if let Some((chat_id, message_id)) = callback_message_target(&q) {
-        bot.edit_message_text(chat_id, message_id, render_user_card_text(&user, page))
+        bot.edit_message_text(chat_id, message_id, render_user_card_text(&user))
             .reply_markup(crate::bot::keyboards::user_card_keyboard(user.tg_user_id, page))
             .await?;
     }
