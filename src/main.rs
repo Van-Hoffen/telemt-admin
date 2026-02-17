@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use teloxide::dispatching::Dispatcher;
 use teloxide::prelude::*;
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -49,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         db,
         telemt_cfg,
         service,
+        awaiting_invite_users: Arc::new(Mutex::new(std::collections::HashSet::new())),
     };
 
     let bot = Bot::new(token);

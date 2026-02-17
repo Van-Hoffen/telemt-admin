@@ -18,6 +18,29 @@ pub struct Config {
     /// Имя systemd-сервиса telemt
     #[serde(default = "default_service_name")]
     pub service_name: String,
+    /// Политики безопасности invite-токенов
+    #[serde(default)]
+    pub security: SecurityConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SecurityConfig {
+    #[serde(default = "default_token_days")]
+    pub default_token_days: i64,
+    #[serde(default = "default_max_token_days")]
+    pub max_token_days: i64,
+    #[serde(default = "default_allow_auto_approve_tokens")]
+    pub allow_auto_approve_tokens: bool,
+}
+
+impl Default for SecurityConfig {
+    fn default() -> Self {
+        Self {
+            default_token_days: default_token_days(),
+            max_token_days: default_max_token_days(),
+            allow_auto_approve_tokens: default_allow_auto_approve_tokens(),
+        }
+    }
 }
 
 fn default_telemt_config_path() -> PathBuf {
@@ -30,6 +53,18 @@ fn default_db_path() -> PathBuf {
 
 fn default_service_name() -> String {
     "telemt.service".to_string()
+}
+
+fn default_token_days() -> i64 {
+    14
+}
+
+fn default_max_token_days() -> i64 {
+    180
+}
+
+fn default_allow_auto_approve_tokens() -> bool {
+    true
 }
 
 impl Config {
@@ -45,6 +80,9 @@ impl Config {
             telemt_config_path = %config.telemt_config_path.display(),
             db_path = %config.db_path.display(),
             service_name = %config.service_name,
+            security_default_days = config.security.default_token_days,
+            security_max_days = config.security.max_token_days,
+            allow_auto_approve_tokens = config.security.allow_auto_approve_tokens,
             "Config parsed successfully"
         );
         Ok(config)

@@ -1,9 +1,11 @@
 //! SQLite-слой для заявок на регистрацию и связей tg_user_id -> telemt_user.
 
+use rand::distr::{Alphanumeric, SampleString};
 use sqlx::FromRow;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use std::path::Path;
 use std::str::FromStr;
+use thiserror::Error;
 
 /// Результат регистрации.
 #[derive(Debug)]
@@ -28,6 +30,48 @@ pub struct RegistrationRequest {
     pub telemt_username: Option<String>,
     pub secret: Option<String>,
     pub created_at: i64,
+}
+
+#[derive(Debug, Clone, FromRow)]
+pub struct InviteToken {
+    pub id: i64,
+    pub token: String,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub auto_approve: bool,
+    pub created_by: Option<i64>,
+    pub usage_count: i64,
+    pub max_usage: Option<i64>,
+    pub is_active: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum TokenMode {
+    Manual,
+    AutoApprove,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConsumedInviteToken {
+    pub id: i64,
+    pub token: String,
+    pub mode: TokenMode,
+    pub expires_at: i64,
+    pub created_by: Option<i64>,
+    pub usage_count: i64,
+    pub max_usage: Option<i64>,
+}
+
+#[derive(Debug, Error)]
+pub enum TokenConsumeError {
+    #[error("Токен не найден")]
+    NotFound,
+    #[error("Токен отозван")]
+    Revoked,
+    #[error("Срок действия токена истёк")]
+    Expired,
+    #[error("Лимит использований токена исчерпан")]
+    UsageLimitReached,
 }
 
 const STATUS_APPROVED: &str = "approved";
@@ -110,7 +154,64 @@ impl Db {
                 .await?;
         }
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS invite_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT UNIQUE NOT NULL,
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER NOT NULL,
+                auto_approve INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER,
+                usage_count INTEGER NOT NULL DEFAULT 0,
+                max_usage INTEGER,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                revoked_at INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_invite_tokens_token ON invite_tokens(token);
+            CREATE INDEX IF NOT EXISTS idx_invite_tokens_active ON invite_tokens(is_active);
+            CREATE INDEX IF NOT EXISTS idx_invite_tokens_expires_at ON invite_tokens(expires_at);
+            "#,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(|e| anyhow::anyhow!("Миграция invite_tokens: {}", e))?;
+
+        self.ensure_column_exists("invite_tokens", "max_usage", "INTEGER")
+            .await?;
+        self.ensure_column_exists("invite_tokens", "is_active", "INTEGER NOT NULL DEFAULT 1")
+            .await?;
+        self.ensure_column_exists("invite_tokens", "revoked_at", "INTEGER")
+            .await?;
+
         Ok(())
+    }
+
+    async fn ensure_column_exists(
+        &self,
+        table: &str,
+        column: &str,
+        sql_type: &str,
+    ) -> Result<(), anyhow::Error> {
+        let count = sqlx::query_scalar::<_, i64>(&format!(
+            "SELECT COUNT(*) FROM pragma_table_info('{}') WHERE name = '{}'",
+            table, column
+        ))
+        .fetch_one(&self.pool)
+        .await?;
+        if count == 0 {
+            sqlx::query(&format!(
+                "ALTER TABLE {} ADD COLUMN {} {}",
+                table, column, sql_type
+            ))
+            .execute(&self.pool)
+            .await?;
+        }
+        Ok(())
+    }
+
+    fn generate_invite_token() -> String {
+        Alphanumeric.sample_string(&mut rand::rng(), 10)
     }
 
     /// Создаёт или возвращает существующую pending-заявку.
@@ -323,6 +424,173 @@ impl Db {
         .fetch_optional(&self.pool)
         .await?;
         Ok(r.and_then(|x| x.telemt_username.zip(x.secret)))
+    }
+
+    pub async fn get_request_by_tg_user(
+        &self,
+        tg_user_id: i64,
+    ) -> Result<Option<RegistrationRequest>, anyhow::Error> {
+        let r = sqlx::query_as::<_, RegistrationRequest>(
+            "SELECT id, tg_user_id, tg_username, tg_display_name, status, telemt_username, secret, created_at FROM registration_requests WHERE tg_user_id = ?",
+        )
+        .bind(tg_user_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(r)
+    }
+
+    pub async fn create_invite_token(
+        &self,
+        days: i64,
+        auto_approve: bool,
+        max_usage: Option<i64>,
+        created_by: Option<i64>,
+    ) -> Result<InviteToken, anyhow::Error> {
+        let now = current_unix_timestamp()?;
+        let ttl_seconds = days
+            .checked_mul(86_400)
+            .ok_or_else(|| anyhow::anyhow!("Срок действия токена слишком большой"))?;
+        let expires_at = now
+            .checked_add(ttl_seconds)
+            .ok_or_else(|| anyhow::anyhow!("Некорректное время истечения токена"))?;
+
+        let mut created: Option<InviteToken> = None;
+        for _ in 0..8 {
+            let token = Self::generate_invite_token();
+            let result = sqlx::query(
+                "INSERT INTO invite_tokens (token, created_at, expires_at, auto_approve, created_by, max_usage) VALUES (?, ?, ?, ?, ?, ?)",
+            )
+            .bind(&token)
+            .bind(now)
+            .bind(expires_at)
+            .bind(auto_approve)
+            .bind(created_by)
+            .bind(max_usage)
+            .execute(&self.pool)
+            .await;
+
+            match result {
+                Ok(_) => {
+                    created = sqlx::query_as::<_, InviteToken>(
+                        "SELECT id, token, created_at, expires_at, auto_approve, created_by, usage_count, max_usage, is_active FROM invite_tokens WHERE token = ?",
+                    )
+                    .bind(token)
+                    .fetch_optional(&self.pool)
+                    .await?;
+                    if created.is_some() {
+                        break;
+                    }
+                }
+                Err(err) => {
+                    let message = err.to_string().to_lowercase();
+                    if message.contains("unique") {
+                        continue;
+                    }
+                    return Err(anyhow::anyhow!("Не удалось создать invite-токен: {}", err));
+                }
+            }
+        }
+
+        created.ok_or_else(|| anyhow::anyhow!("Не удалось сгенерировать уникальный токен"))
+    }
+
+    pub async fn list_active_invite_tokens(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<InviteToken>, anyhow::Error> {
+        let now = current_unix_timestamp()?;
+        let rows = sqlx::query_as::<_, InviteToken>(
+            "SELECT id, token, created_at, expires_at, auto_approve, created_by, usage_count, max_usage, is_active
+             FROM invite_tokens
+             WHERE is_active = 1
+               AND expires_at > ?
+               AND (max_usage IS NULL OR usage_count < max_usage)
+             ORDER BY expires_at ASC
+             LIMIT ?",
+        )
+        .bind(now)
+        .bind(limit)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn revoke_invite_token(&self, token: &str) -> Result<bool, anyhow::Error> {
+        let now = current_unix_timestamp()?;
+        let result = sqlx::query(
+            "UPDATE invite_tokens SET is_active = 0, revoked_at = ? WHERE token = ? AND is_active = 1",
+        )
+        .bind(now)
+        .bind(token)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn consume_invite_token(
+        &self,
+        token: &str,
+    ) -> Result<ConsumedInviteToken, TokenConsumeError> {
+        let now = current_unix_timestamp().map_err(|_| TokenConsumeError::NotFound)?;
+        let update_result = sqlx::query(
+            "UPDATE invite_tokens
+             SET usage_count = usage_count + 1
+             WHERE token = ?
+               AND is_active = 1
+               AND expires_at > ?
+               AND (max_usage IS NULL OR usage_count < max_usage)",
+        )
+        .bind(token)
+        .bind(now)
+        .execute(&self.pool)
+        .await
+        .map_err(|_| TokenConsumeError::NotFound)?;
+
+        if update_result.rows_affected() == 0 {
+            let token_row = sqlx::query_as::<_, InviteToken>(
+                "SELECT id, token, created_at, expires_at, auto_approve, created_by, usage_count, max_usage, is_active FROM invite_tokens WHERE token = ?",
+            )
+            .bind(token)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|_| TokenConsumeError::NotFound)?;
+
+            let Some(row) = token_row else {
+                return Err(TokenConsumeError::NotFound);
+            };
+            if !row.is_active {
+                return Err(TokenConsumeError::Revoked);
+            }
+            if row.expires_at <= now {
+                return Err(TokenConsumeError::Expired);
+            }
+            if row.max_usage.is_some_and(|max| row.usage_count >= max) {
+                return Err(TokenConsumeError::UsageLimitReached);
+            }
+            return Err(TokenConsumeError::NotFound);
+        }
+
+        let row = sqlx::query_as::<_, InviteToken>(
+            "SELECT id, token, created_at, expires_at, auto_approve, created_by, usage_count, max_usage, is_active FROM invite_tokens WHERE token = ?",
+        )
+        .bind(token)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| TokenConsumeError::NotFound)?;
+        let row = row.ok_or(TokenConsumeError::NotFound)?;
+        Ok(ConsumedInviteToken {
+            id: row.id,
+            token: row.token,
+            mode: if row.auto_approve {
+                TokenMode::AutoApprove
+            } else {
+                TokenMode::Manual
+            },
+            expires_at: row.expires_at,
+            created_by: row.created_by,
+            usage_count: row.usage_count,
+            max_usage: row.max_usage,
+        })
     }
 
     /// Ищет tg_user_id по tg_username (без учёта регистра, без @).
