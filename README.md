@@ -67,6 +67,7 @@ admin_ids = [123456789] # Ваш Telegram ID
 telemt_config_path = "/etc/telemt.toml"
 db_path = "/var/lib/telemt-admin/state.db"
 service_name = "telemt.service"
+users_page_size = 10
 
 [security]
 default_token_days = 14
@@ -209,17 +210,16 @@ sudo systemctl enable --now telemt-admin.service
 
 ## Конфигурация (telemt-admin.toml)
 
-| Параметр                    | Описание                                                   |
-| :-------------------------- | :--------------------------------------------------------- |
-| `bot_token`                 | Токен бота от @BotFather (опционально, если есть `TELOXIDE_TOKEN`). |
-| `admin_ids`                 | Массив ID администраторов `[123, 456]` (обязательный).     |
-| `telemt_config_path`        | Путь к `/etc/telemt.toml` (default: `/etc/telemt.toml`).   |
-| `db_path`                   | Путь к `state.db` (default: `/var/lib/telemt-admin/state.db`). |
-| `service_name`              | Имя сервиса (default: `telemt.service`).                   |
-| **[security]**              | **Настройки безопасности токенов**                         |
-| `default_token_days`        | Срок жизни токена по умолчанию (default: 14).              |
-| `max_token_days`            | Максимально допустимый срок (default: 180).                |
-| `allow_auto_approve_tokens` | Разрешить создание auto-approve токенов (default: `true`). |
+- `bot_token` — токен бота от @BotFather (опционально, если есть `TELOXIDE_TOKEN`).
+- `admin_ids` — массив ID администраторов `[123, 456]` (обязательный).
+- `telemt_config_path` — путь к `/etc/telemt.toml` (default: `/etc/telemt.toml`).
+- `db_path` — путь к `state.db` (default: `/var/lib/telemt-admin/state.db`).
+- `service_name` — имя сервиса (default: `telemt.service`).
+- `users_page_size` — размер страницы списка пользователей (default: `10`).
+- `[security]` — настройки безопасности токенов:
+  - `default_token_days` — срок жизни токена по умолчанию (default: 14).
+  - `max_token_days` — максимально допустимый срок (default: 180).
+  - `allow_auto_approve_tokens` — разрешить создание auto-approve токенов (default: `true`).
 
 ## Проверка после запуска
 

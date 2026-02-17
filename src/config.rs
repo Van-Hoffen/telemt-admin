@@ -18,6 +18,9 @@ pub struct Config {
     /// Имя systemd-сервиса telemt
     #[serde(default = "default_service_name")]
     pub service_name: String,
+    /// Размер страницы в списке активных пользователей
+    #[serde(default = "default_users_page_size")]
+    pub users_page_size: i64,
     /// Политики безопасности invite-токенов
     #[serde(default)]
     pub security: SecurityConfig,
@@ -55,6 +58,10 @@ fn default_service_name() -> String {
     "telemt.service".to_string()
 }
 
+fn default_users_page_size() -> i64 {
+    10
+}
+
 fn default_token_days() -> i64 {
     14
 }
@@ -80,6 +87,7 @@ impl Config {
             telemt_config_path = %config.telemt_config_path.display(),
             db_path = %config.db_path.display(),
             service_name = %config.service_name,
+            users_page_size = config.users_page_size,
             security_default_days = config.security.default_token_days,
             security_max_days = config.security.max_token_days,
             allow_auto_approve_tokens = config.security.allow_auto_approve_tokens,
