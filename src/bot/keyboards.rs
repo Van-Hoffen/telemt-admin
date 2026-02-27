@@ -141,6 +141,42 @@ pub fn service_control_buttons() -> InlineKeyboardMarkup {
         ])
 }
 
+pub fn users_page_keyboard(
+    users: &[(i64, String)],
+    page: i64,
+    total_pages: i64,
+) -> InlineKeyboardMarkup {
+    let mut rows: Vec<Vec<InlineKeyboardButton>> = Vec::new();
+    for (tg_user_id, title) in users {
+        rows.push(vec![InlineKeyboardButton::callback(
+            format!("👤 {}", title),
+            format!("user_open:{}:{}", tg_user_id, page),
+        )]);
+    }
+
+    let prev_page = if page > 1 { page - 1 } else { 1 };
+    let next_page = if page < total_pages {
+        page + 1
+    } else {
+        total_pages
+    };
+
+    rows.push(vec![
+        InlineKeyboardButton::callback("⬅️", format!("users_page:{}", prev_page)),
+        InlineKeyboardButton::callback(
+            format!("📄 {}/{}", page, total_pages.max(1)),
+            format!("users_page:{}", page),
+        ),
+        InlineKeyboardButton::callback("➡️", format!("users_page:{}", next_page)),
+    ]);
+    rows.push(vec![InlineKeyboardButton::callback(
+        "🔄 Обновить",
+        format!("users_page:{}", page),
+    )]);
+
+    InlineKeyboardMarkup::new(rows)
+}
+
 pub fn approve_reject_buttons(request_id: i64) -> InlineKeyboardMarkup {
     InlineKeyboardMarkup::default().append_row(vec![
         InlineKeyboardButton::callback("✅ Одобрить", format!("approve:{}", request_id)),
