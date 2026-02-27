@@ -1,1 +1,33 @@
-/target
+```rust
+# Compiled and build artifacts
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+target/
+
+# Dependencies
+Cargo.lock
+**/vendor/
+**/deps/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+**/*.rs.bk
+```

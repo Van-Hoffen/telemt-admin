@@ -105,8 +105,4 @@ pub fn service_control_buttons() -> InlineKeyboardMarkup {
             InlineKeyboardButton::callback("🔄 Обновить", "service:status"),
             InlineKeyboardButton::callback("♻️ Рестарт", "service:restart"),
         ])
-        .append_row(vec![InlineKeyboardButton::callback(
-            "📖 Перечитать конфиг",
-            "service:reload",
-        )])
 }
