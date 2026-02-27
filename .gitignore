@@ -1,76 +1,43 @@
-```rust
+```
 # Compiled and build artifacts
+*.pyc
+__pycache__/
 *.o
 *.obj
-*.a
-*.lib
+*.exe
 *.dll
 *.so
-*.dylib
-*.exe
+*.a
 *.out
-
 # Dependencies
+.venv/
+venv/
+node_modules/
+.mypy_cache/
+.pytest_cache/
 target/
-Cargo.lock
-
+.gradle/
+build/
+dist/
 # Logs and temp files
 *.log
 *.tmp
 *.swp
 *.swo
-
 # Environment
 .env
 .env.local
 *.env.*
-
 # Editors
 .vscode/
 .idea/
-*.swp
-*.swo
-
 # Coverage
 coverage/
 htmlcov/
 .coverage
-
-# Python specific
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage*
-.nox/
-.mypy_cache/
-.pytest_cache/
-.hypothesis/
-
-# Node.js specific
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-node_modules/
-dist/
-build/
-
-# Rust specific
-/target/
-Cargo.lock
-
-# Gradle
-.gradle/
-build/
-
+# System files
+.DS_Store
+Thumbs.db
 # Compressed files
 *.zip
 *.gz
