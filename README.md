@@ -47,7 +47,7 @@
 Одной командой скачайте последний стабильный релиз для Linux x86_64:
 
 ```bash
-curl -L -o telemt-admin.tar.gz https://github.com/fgbm/telemt-admin/releases/latest/download/telemt-admin-linux-x86_64.tar.gz && tar -xzf telemt-admin.tar.gz
+curl -L -o telemt-admin.tar.gz https://github.com/Van-Hoffen/telemt-admin/releases/latest/download/telemt-admin-linux-x86_64.tar.gz && tar -xzf telemt-admin.tar.gz
 ```
 
 ### 2. Установка бинарного файла
